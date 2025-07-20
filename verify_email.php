@@ -5,6 +5,9 @@ require_once 'php/email_helper.php';
 $error = '';
 $success = '';
 
+// Use email from session if available
+$email = isset($_SESSION['verify_email']) ? $_SESSION['verify_email'] : '';
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['verify'])) {
         $email = trim($_POST['email']);
@@ -22,6 +25,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $update_stmt->bind_param("s", $email);
                 
                 if ($update_stmt->execute()) {
+                    // Log the user in and redirect to dashboard
+                    $user_sql = "SELECT * FROM users WHERE email = ?";
+                    $user_stmt = $conn->prepare($user_sql);
+                    $user_stmt->bind_param("s", $email);
+                    $user_stmt->execute();
+                    $user_result = $user_stmt->get_result();
+                    if ($user_result->num_rows > 0) {
+                        $user = $user_result->fetch_assoc();
+                        $_SESSION['user_id'] = $user['id'];
+                        $_SESSION['username'] = $user['username'];
+                        $_SESSION['role'] = $user['role'];
+                        $_SESSION['full_name'] = $user['full_name'];
+                        unset($_SESSION['verify_email']);
+                        // Redirect to dashboard
+                        switch ($user['role']) {
+                            case 'student':
+                                header('Location: student/dashboard.php');
+                                break;
+                            case 'teacher':
+                                header('Location: teacher/dashboard.php');
+                                break;
+                            case 'admin':
+                                header('Location: admin/dashboard.php');
+                                break;
+                        }
+                        exit();
+                    }
                     $success = 'Email verified successfully! You can now login to your account.';
                 } else {
                     $error = 'Verification failed. Please try again.';
@@ -105,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 <label for="email" class="form-label">Email Address</label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                                    <input type="email" class="form-control" id="email" name="email" required>
+                                    <input type="email" class="form-control" id="email" name="email" required value="<?php echo htmlspecialchars($email); ?>">
                                 </div>
                             </div>
                             
@@ -128,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <div class="text-center">
                             <p class="mb-2">Didn't receive the code?</p>
                             <form method="POST" action="" style="display: inline;">
-                                <input type="hidden" name="email" id="resendEmail">
+                                <input type="hidden" name="email" id="resendEmail" value="<?php echo htmlspecialchars($email); ?>">
                                 <button type="submit" name="resend" class="btn btn-outline-secondary">
                                     <i class="fas fa-redo me-2"></i>Resend Code
                                 </button>

@@ -49,7 +49,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     if (storeOTP($email, $otp)) {
                         $emailHelper = new EmailHelper();
                         if ($emailHelper->sendOTP($email, $otp)) {
-                            $success = 'Registration successful! Please check your email for verification code.';
+                            // Store email in session and redirect to verify_email.php
+                            $_SESSION['verify_email'] = $email;
+                            header('Location: verify_email.php');
+                            exit();
                         } else {
                             $error = 'Registration successful but failed to send verification email. Please contact administrator.';
                         }
@@ -57,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $error = 'Registration successful but failed to generate verification code. Please contact administrator.';
                     }
                 } else {
-                    $error = 'Registration failed. Please try again.';
+                    $error = 'Registration failed. SQL Error: ' . $conn->error;
                 }
             }
         }
