@@ -1,0 +1,22 @@
+{
+    "name": "attendance-system/attendance-management",
+    "description": "A comprehensive web-based attendance management system with geolocation and email verification",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "phpmailer/phpmailer": "^6.8"
+    },
+    "autoload": {
+        "psr-4": {
+            "AttendanceSystem\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Attendance System Developer",
+            "email": "developer@attendance-system.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
