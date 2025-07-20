@@ -36,42 +36,49 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             $sql = "SELECT * FROM users WHERE username = ? OR email = ?";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ss", $username, $username);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            if ($result->num_rows > 0) {
-                $user = $result->fetch_assoc();
-                if (password_verify($password, $user['password'])) {
-                    if ($user['is_verified'] || $user['role'] == 'admin') {
-                        $_SESSION['user_id'] = $user['id'];
-                        $_SESSION['username'] = $user['username'];
-                        $_SESSION['role'] = $user['role'];
-                        $_SESSION['full_name'] = $user['full_name'];
-                        
-                        // Debug: Log the redirect attempt
-                        error_log("Login successful for user: " . $user['username'] . " with role: " . $user['role']);
-                        
-                        switch ($user['role']) {
-                            case 'student':
-                                header('Location: student/dashboard.php');
-                                break;
-                            case 'teacher':
-                                header('Location: teacher/dashboard.php');
-                                break;
-                            case 'admin':
-                                header('Location: admin/dashboard.php');
-                                break;
-                        }
-                        exit();
-                    } else {
-                        $error = 'Please verify your email before logging in';
-                    }
-                } else {
-                    $error = 'Invalid username or password';
-                }
+            if (!$stmt) {
+                $error = 'Database error (prepare): ' . $conn->error;
             } else {
-                $error = 'Invalid username or password';
+                $stmt->bind_param("ss", $username, $username);
+                if (!$stmt->execute()) {
+                    $error = 'Database error (execute): ' . $stmt->error;
+                } else {
+                    $result = $stmt->get_result();
+                    
+                    if ($result->num_rows > 0) {
+                        $user = $result->fetch_assoc();
+                        if (password_verify($password, $user['password'])) {
+                            if ($user['is_verified'] || $user['role'] == 'admin') {
+                                $_SESSION['user_id'] = $user['id'];
+                                $_SESSION['username'] = $user['username'];
+                                $_SESSION['role'] = $user['role'];
+                                $_SESSION['full_name'] = $user['full_name'];
+                                
+                                // Debug: Log the redirect attempt
+                                error_log("Login successful for user: " . $user['username'] . " with role: " . $user['role']);
+                                
+                                switch ($user['role']) {
+                                    case 'student':
+                                        header('Location: student/dashboard.php');
+                                        break;
+                                    case 'teacher':
+                                        header('Location: teacher/dashboard.php');
+                                        break;
+                                    case 'admin':
+                                        header('Location: admin/dashboard.php');
+                                        break;
+                                }
+                                exit();
+                            } else {
+                                $error = 'Please verify your email before logging in';
+                            }
+                        } else {
+                            $error = 'Invalid username or password';
+                        }
+                    } else {
+                        $error = 'Invalid username or password';
+                    }
+                }
             }
         }
     }
