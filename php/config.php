@@ -22,7 +22,12 @@ if ($conn->query($sql) === TRUE) {
     // Create tables
     createTables($conn);
 } else {
-    echo "Error creating database: " . $conn->error;
+    die("Error creating database: " . $conn->error);
+}
+
+// Ensure we're using the correct database
+if (!$conn->select_db(DB_NAME)) {
+    die("Error selecting database: " . $conn->error);
 }
 
 function createTables($conn) {

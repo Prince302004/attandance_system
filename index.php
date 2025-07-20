@@ -29,6 +29,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if (empty($username) || empty($password)) {
             $error = 'Please fill in all fields';
         } else {
+            // Debug: Check if we're using the correct database
+            if ($conn->database != DB_NAME) {
+                $conn->select_db(DB_NAME);
+            }
+            
             $sql = "SELECT * FROM users WHERE username = ? OR email = ?";
             $stmt = $conn->prepare($sql);
             $stmt->bind_param("ss", $username, $username);
@@ -43,6 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $_SESSION['username'] = $user['username'];
                         $_SESSION['role'] = $user['role'];
                         $_SESSION['full_name'] = $user['full_name'];
+                        
+                        // Debug: Log the redirect attempt
+                        error_log("Login successful for user: " . $user['username'] . " with role: " . $user['role']);
                         
                         switch ($user['role']) {
                             case 'student':
