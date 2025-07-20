@@ -6,43 +6,47 @@ $error = '';
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (isset($_POST['reset'])) {
+    if (isset($_POST['send_otp'])) {
         $email = trim($_POST['email']);
         
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Please enter a valid email address';
         } else {
             // Check if user exists
-            $check_sql = "SELECT id, username FROM users WHERE email = ?";
+            $check_sql = "SELECT id, username, full_name FROM users WHERE email = ?";
             $check_stmt = $conn->prepare($check_sql);
             $check_stmt->bind_param("s", $email);
             $check_stmt->execute();
             $check_result = $check_stmt->get_result();
             
             if ($check_result->num_rows > 0) {
-                // Generate reset token
-                $token = bin2hex(random_bytes(32));
-                $expires_at = date('Y-m-d H:i:s', strtotime('+1 hour'));
+                $user = $check_result->fetch_assoc();
                 
-                // Store reset token
-                $insert_sql = "INSERT INTO password_reset (email, token, expires_at) VALUES (?, ?, ?)";
+                // Generate OTP
+                $otp = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+                $expires_at = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+                
+                // Store OTP
+                $insert_sql = "INSERT INTO otp_verification (email, otp, expires_at) VALUES (?, ?, ?)";
                 $insert_stmt = $conn->prepare($insert_sql);
-                $insert_stmt->bind_param("sss", $email, $token, $expires_at);
+                $insert_stmt->bind_param("sss", $email, $otp, $expires_at);
                 
                 if ($insert_stmt->execute()) {
-                    // Send reset email
+                    // Send OTP email
                     $emailHelper = new EmailHelper();
-                    if ($emailHelper->sendPasswordReset($email, $token)) {
-                        $success = 'Password reset instructions have been sent to your email address.';
+                    if ($emailHelper->sendPasswordResetOTP($email, $otp, $user['full_name'])) {
+                        $success = 'Password reset OTP has been sent to your email address.';
+                        // Store email in session for verification
+                        $_SESSION['reset_email'] = $email;
                     } else {
-                        $error = 'Failed to send reset email. Please try again.';
+                        $error = 'Failed to send OTP email. Please try again.';
                     }
                 } else {
-                    $error = 'Failed to process reset request. Please try again.';
+                    $error = 'Failed to process request. Please try again.';
                 }
             } else {
                 // Don't reveal if email exists or not for security
-                $success = 'If the email address exists in our system, you will receive password reset instructions.';
+                $success = 'If the email address exists in our system, you will receive a password reset OTP.';
             }
         }
     }
@@ -68,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <div class="text-center mb-4">
                             <i class="fas fa-key fa-3x text-primary mb-3"></i>
                             <h2 class="fw-bold text-dark">Forgot Password</h2>
-                            <p class="text-muted">Enter your email to reset your password</p>
+                            <p class="text-muted">Enter your email to receive a password reset OTP</p>
                         </div>
                         
                         <?php if ($error): ?>
@@ -92,11 +96,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     <span class="input-group-text"><i class="fas fa-envelope"></i></span>
                                     <input type="email" class="form-control" id="email" name="email" required>
                                 </div>
-                                <small class="text-muted">We'll send you a link to reset your password</small>
+                                <small class="text-muted">We'll send you a 6-digit OTP to reset your password</small>
                             </div>
                             
-                            <button type="submit" name="reset" class="btn btn-primary w-100 mb-3">
-                                <i class="fas fa-paper-plane me-2"></i>Send Reset Link
+                            <button type="submit" name="send_otp" class="btn btn-primary w-100 mb-3">
+                                <i class="fas fa-paper-plane me-2"></i>Send OTP
                             </button>
                         </form>
                         
