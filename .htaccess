@@ -25,10 +25,23 @@ Options -Indexes
     Deny from all
 </Files>
 
-# Protect config files
-<Files "config.php">
+# Protect database files
+<Files "*.sql">
     Order allow,deny
     Deny from all
+</Files>
+
+# Protect .env files
+<Files ".env">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Allow access to config.php only from PHP includes (not direct web access)
+<Files "php/config.php">
+    <RequireAll>
+        Require all denied
+    </RequireAll>
 </Files>
 
 # Enable URL rewriting
@@ -41,6 +54,11 @@ Options -Indexes
     
     # Handle 404 errors
     ErrorDocument 404 /index.php
+    
+    # Allow access to dashboard directories
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(student|teacher|admin)/.*$ - [L]
 </IfModule>
 
 # PHP Settings
@@ -51,7 +69,7 @@ Options -Indexes
     php_value max_input_time 300
     php_value memory_limit 256M
     php_value session.cookie_httponly 1
-    php_value session.cookie_secure 1
+    # php_value session.cookie_secure 1  # Uncomment only if using HTTPS
     php_value session.use_strict_mode 1
 </IfModule>
 
