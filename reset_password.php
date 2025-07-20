@@ -1,56 +1,63 @@
 <?php
 require_once 'php/config.php';
+require_once 'php/email_helper.php';
 
 $error = '';
 $success = '';
-$token = $_GET['token'] ?? '';
 
-if (empty($token)) {
-    header('Location: index.php');
+// Check if user has requested OTP
+if (!isset($_SESSION['reset_email'])) {
+    header('Location: forgot_password.php');
     exit();
 }
 
-// Verify token
-$check_sql = "SELECT email FROM password_reset WHERE token = ? AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1";
-$check_stmt = $conn->prepare($check_sql);
-$check_stmt->bind_param("s", $token);
-$check_stmt->execute();
-$check_result = $check_stmt->get_result();
+$reset_email = $_SESSION['reset_email'];
 
-if ($check_result->num_rows == 0) {
-    $error = 'Invalid or expired reset link. Please request a new password reset.';
-} else {
-    $reset_data = $check_result->fetch_assoc();
-    $email = $reset_data['email'];
-}
-
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && empty($error)) {
-    $password = $_POST['password'];
-    $confirm_password = $_POST['confirm_password'];
-    
-    if (empty($password) || empty($confirm_password)) {
-        $error = 'Please fill in all fields';
-    } elseif ($password !== $confirm_password) {
-        $error = 'Passwords do not match';
-    } elseif (strlen($password) < 6) {
-        $error = 'Password must be at least 6 characters long';
-    } else {
-        // Update password
-        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-        $update_sql = "UPDATE users SET password = ? WHERE email = ?";
-        $update_stmt = $conn->prepare($update_sql);
-        $update_stmt->bind_param("ss", $hashed_password, $email);
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['verify_otp'])) {
+        $otp = trim($_POST['otp']);
         
-        if ($update_stmt->execute()) {
-            // Delete used reset token
-            $delete_sql = "DELETE FROM password_reset WHERE token = ?";
-            $delete_stmt = $conn->prepare($delete_sql);
-            $delete_stmt->bind_param("s", $token);
-            $delete_stmt->execute();
-            
-            $success = 'Password has been reset successfully! You can now login with your new password.';
+        if (empty($otp) || strlen($otp) != 6) {
+            $error = 'Please enter a valid 6-digit OTP';
         } else {
-            $error = 'Failed to reset password. Please try again.';
+            // Verify OTP
+            $emailHelper = new EmailHelper();
+            if (verifyOTP($reset_email, $otp)) {
+                $_SESSION['otp_verified'] = true;
+                $success = 'OTP verified successfully. You can now set your new password.';
+            } else {
+                $error = 'Invalid or expired OTP. Please try again.';
+            }
+        }
+    } elseif (isset($_POST['reset_password'])) {
+        $new_password = $_POST['new_password'];
+        $confirm_password = $_POST['confirm_password'];
+        
+        if (empty($new_password) || strlen($new_password) < 6) {
+            $error = 'Password must be at least 6 characters long';
+        } elseif ($new_password !== $confirm_password) {
+            $error = 'Passwords do not match';
+        } elseif (!isset($_SESSION['otp_verified']) || !$_SESSION['otp_verified']) {
+            $error = 'Please verify OTP first';
+        } else {
+            // Update password
+            $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+            $update_sql = "UPDATE users SET password = ? WHERE email = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            $update_stmt->bind_param("ss", $hashed_password, $reset_email);
+            
+            if ($update_stmt->execute()) {
+                // Clear session variables
+                unset($_SESSION['reset_email']);
+                unset($_SESSION['otp_verified']);
+                
+                $success = 'Password has been reset successfully. You can now login with your new password.';
+                
+                // Redirect to login after 3 seconds
+                header("refresh:3;url=index.php");
+            } else {
+                $error = 'Failed to reset password. Please try again.';
+            }
         }
     }
 }
@@ -75,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && empty($error)) {
                         <div class="text-center mb-4">
                             <i class="fas fa-lock fa-3x text-primary mb-3"></i>
                             <h2 class="fw-bold text-dark">Reset Password</h2>
-                            <p class="text-muted">Enter your new password</p>
+                            <p class="text-muted">Reset your password using OTP</p>
                         </div>
                         
                         <?php if ($error): ?>
@@ -92,32 +99,60 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && empty($error)) {
                             </div>
                         <?php endif; ?>
                         
-                        <?php if (empty($error) && empty($success)): ?>
+                        <div class="mb-3">
+                            <small class="text-muted">
+                                <i class="fas fa-envelope me-1"></i>
+                                OTP sent to: <?php echo htmlspecialchars($reset_email); ?>
+                            </small>
+                        </div>
+                        
+                        <?php if (!isset($_SESSION['otp_verified']) || !$_SESSION['otp_verified']): ?>
+                            <!-- OTP Verification Form -->
                             <form method="POST" action="">
                                 <div class="mb-3">
-                                    <label for="password" class="form-label">New Password</label>
+                                    <label for="otp" class="form-label">Enter OTP</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-key"></i></span>
+                                        <input type="text" class="form-control" id="otp" name="otp" 
+                                               maxlength="6" pattern="[0-9]{6}" 
+                                               placeholder="123456" required>
+                                    </div>
+                                    <small class="text-muted">Enter the 6-digit OTP sent to your email</small>
+                                </div>
+                                
+                                <button type="submit" name="verify_otp" class="btn btn-primary w-100 mb-3">
+                                    <i class="fas fa-check me-2"></i>Verify OTP
+                                </button>
+                            </form>
+                        <?php else: ?>
+                            <!-- Password Reset Form -->
+                            <form method="POST" action="" id="passwordForm">
+                                <div class="mb-3">
+                                    <label for="new_password" class="form-label">New Password</label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                                        <input type="password" class="form-control" id="password" name="password" required>
-                                        <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                        <input type="password" class="form-control" id="new_password" 
+                                               name="new_password" minlength="6" required>
+                                        <button class="btn btn-outline-secondary" type="button" id="toggleNewPassword">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                     </div>
-                                    <small class="text-muted">Minimum 6 characters</small>
+                                    <small class="text-muted">Password must be at least 6 characters</small>
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label for="confirm_password" class="form-label">Confirm New Password</label>
+                                    <label for="confirm_password" class="form-label">Confirm Password</label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                        <input type="password" class="form-control" id="confirm_password" 
+                                               name="confirm_password" minlength="6" required>
                                         <button class="btn btn-outline-secondary" type="button" id="toggleConfirmPassword">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                     </div>
                                 </div>
                                 
-                                <button type="submit" class="btn btn-primary w-100 mb-3">
+                                <button type="submit" name="reset_password" class="btn btn-success w-100 mb-3">
                                     <i class="fas fa-save me-2"></i>Reset Password
                                 </button>
                             </form>
@@ -126,8 +161,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && empty($error)) {
                         <hr class="my-4">
                         
                         <div class="text-center">
+                            <a href="forgot_password.php" class="btn btn-outline-secondary me-2">
+                                <i class="fas fa-arrow-left me-2"></i>Back
+                            </a>
                             <a href="index.php" class="btn btn-outline-primary">
-                                <i class="fas fa-sign-in-alt me-2"></i>Back to Login
+                                <i class="fas fa-sign-in-alt me-2"></i>Login
                             </a>
                         </div>
                     </div>
@@ -137,6 +175,54 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && empty($error)) {
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/reset_password.js"></script>
+    <script>
+        // Password toggle functionality
+        document.getElementById('toggleNewPassword').addEventListener('click', function() {
+            const passwordField = document.getElementById('new_password');
+            const icon = this.querySelector('i');
+            
+            if (passwordField.type === 'password') {
+                passwordField.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                passwordField.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        });
+        
+        document.getElementById('toggleConfirmPassword').addEventListener('click', function() {
+            const passwordField = document.getElementById('confirm_password');
+            const icon = this.querySelector('i');
+            
+            if (passwordField.type === 'password') {
+                passwordField.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                passwordField.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        });
+        
+        // Password confirmation validation
+        document.getElementById('passwordForm').addEventListener('submit', function(e) {
+            const newPassword = document.getElementById('new_password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            
+            if (newPassword !== confirmPassword) {
+                e.preventDefault();
+                alert('Passwords do not match!');
+                return false;
+            }
+        });
+        
+        // OTP input formatting
+        document.getElementById('otp').addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '').substring(0, 6);
+        });
+    </script>
 </body>
 </html>

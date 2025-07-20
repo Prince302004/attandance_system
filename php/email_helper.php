@@ -58,25 +58,27 @@ class EmailHelper {
         }
     }
     
-    public function sendPasswordReset($email, $token) {
+    public function sendPasswordResetOTP($email, $otp, $full_name) {
         try {
             $this->mailer->addAddress($email);
-            $this->mailer->Subject = 'Password Reset Request';
-            
-            $reset_link = "http://" . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . "/reset_password.php?token=" . $token;
+            $this->mailer->Subject = 'Password Reset OTP - Attendance System';
             
             $body = "
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
-                <h2 style='color: #333;'>Password Reset Request</h2>
-                <p>You have requested to reset your password. Click the link below to proceed:</p>
-                <div style='text-align: center; margin: 20px 0;'>
-                    <a href='$reset_link' style='background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px;'>Reset Password</a>
+                <h2 style='color: #333;'>Password Reset OTP</h2>
+                <p>Hello $full_name,</p>
+                <p>You have requested to reset your password. Use the OTP below to proceed:</p>
+                <div style='background-color: #f4f4f4; padding: 20px; text-align: center; margin: 20px 0; border-radius: 10px;'>
+                    <h1 style='color: #007bff; font-size: 32px; margin: 0; letter-spacing: 5px;'>$otp</h1>
                 </div>
-                <p>This link will expire in 1 hour.</p>
+                <p><strong>This OTP will expire in 10 minutes.</strong></p>
                 <p>If you didn't request this reset, please ignore this email.</p>
+                <hr style='margin: 20px 0;'>
+                <p style='color: #666; font-size: 12px;'>This is an automated email from the Attendance Management System.</p>
             </div>";
             
             $this->mailer->Body = $body;
+            $this->mailer->AltBody = "Password Reset OTP\n\nHello $full_name,\n\nYour password reset OTP is: $otp\n\nThis OTP will expire in 10 minutes.\n\nIf you didn't request this reset, please ignore this email.";
             $this->mailer->send();
             return true;
         } catch (Exception $e) {
